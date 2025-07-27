@@ -1,0 +1,1628 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Version Control AI Canvas</title>
+    
+    <!-- Google Font: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- highlight.js CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    
+    <style>
+        /* CSS tùy chỉnh để giao diện đẹp hơn */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* bg-gray-100 */
+            color: #374151; /* text-gray-700 */
+        }
+        /* Hiệu ứng khi di chuột vào nút */
+        button {
+            transition: all 0.3s ease;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 10px -1px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.08); /* Stronger shadow on hover */
+        }
+        button:active:not(:disabled) {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.06); /* Pressed effect */
+        }
+
+        /* Kiểu cho các mục trong danh sách */
+        .list-item {
+            transition: all 0.2s ease;
+            border: 1px solid #e5e7eb; /* Add default border */
+        }
+        .list-item:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border-color: #bfdbfe; /* blue-200 */
+        }
+        .list-item.selected {
+             background-color: #dbeafe; /* blue-100 */
+             border-left: 4px solid #3b82f6; /* blue-500 */
+             border-color: #93c5fd; /* blue-300 for overall border */
+        }
+        /* Biểu tượng tải */
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-left-color: #fff;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        /* CSS cho Modal xem trước */
+        #previewModal iframe {
+            width: 100%; /* Giữ 100% so với container cha */
+            height: 100%; /* Make iframe take full height of its container */
+            border: 1px solid #e5e7eb; /* gray-200 */
+            border-radius: 0.5rem;
+        }
+
+        /* NEW: Styles for preview modes */
+        #previewFrameContainer {
+            transition: max-width 0.3s ease-in-out; /* Hiệu ứng chuyển đổi mượt mà */
+            max-width: 100%; /* Mặc định là full width của modal */
+            width: 100%; /* Đảm bảo nó chiếm đủ không gian theo max-width */
+            flex-grow: 1; /* Allow it to grow and fill vertical space */
+            display: flex; /* Use flex to center iframe if needed */
+            justify-content: center; /* Center iframe horizontally */
+            align-items: center; /* Center iframe vertically */
+            padding-bottom: 1rem; /* Add some padding at the bottom */
+        }
+
+        #previewFrameContainer.mobile-view {
+            max-width: 375px; /* Chiều rộng điển hình cho thiết bị di động */
+        }
+
+        /* NEW: Styles for bigger desktop modal content - ADJUSTED FOR FULLSCREEN */
+        #previewModalContent {
+            transition: max-width 0.3s ease-in-out, width 0.3s ease-in-out, height 0.3s ease-in-out; /* Add height transition */
+            max-width: 90vw; /* Keep this for desktop mode */
+            width: 90vw;
+            max-height: 90vh; /* Add max-height for desktop modal */
+            height: 90vh; /* Ensure it applies */
+            display: flex; /* Ensure flex for internal layout */
+            flex-direction: column; /* Stack header, content, footer */
+        }
+
+        #previewModalContent.desktop-mode-active {
+            max-width: 95vw; /* Take 95% of viewport width for desktop view */
+            width: 95vw;
+            max-height: 95vh; /* Take 95% of viewport height */
+            height: 95vh;
+        }
+
+        /* Thêm style cho trình soạn thảo mới */
+        #editorContainer {
+            min-height: 200px; /* Đảm bảo chiều cao tối thiểu cho trình soạn thảo */
+        }
+        #editableCodeContent {
+            /* Đảm bảo nội dung có thể cuộn và trông giống textarea */
+            outline: none; /* Bỏ viền focus mặc định */
+            tab-size: 4; /* Kích thước tab */
+            min-height: 100%; /* Ensure contenteditable takes full height */
+            white-space: pre-wrap; /* Ensure wrapping within pre */
+            word-break: break-all; /* Break long words */
+        }
+        /* Adjusted placeholder z-index to be lower than content for better interaction */
+        #editorPlaceholder {
+            z-index: 5; /* Lower than editableCodeContent's z-index */
+        }
+        #editableCodeContent[contenteditable="true"] {
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+    <!-- Phần Header -->
+    <header class="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 shadow-lg flex justify-between items-center">
+        <h1 class="text-3xl font-bold">Version Control AI Canvas</h1>
+        <div id="authStatus" class="flex items-center space-x-4">
+            <span id="userEmailDisplay" class="text-lg font-medium hidden"></span>
+            <button id="logoutBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 hidden">
+                Đăng xuất
+            </button>
+        </div>
+    </header>
+
+    <!-- Phần Đăng nhập / Đăng ký -->
+    <div id="authSection" class="flex-grow flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h2 class="text-3xl font-bold mb-6 text-center text-gray-800">Đăng nhập / Đăng ký</h2>
+            <div class="mb-4">
+                <label for="emailInput" class="block text-gray-700 text-base font-bold mb-2">Email:</label>
+                <input type="email" id="emailInput" placeholder="your@example.com" class="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-500">
+            </div>
+            <div class="mb-6">
+                <label for="passwordInput" class="block text-gray-700 text-base font-bold mb-2">Mật khẩu:</label>
+                <input type="password" id="passwordInput" placeholder="********" class="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-500">
+            </div>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <button id="loginBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-5 rounded-lg shadow-md flex-grow">
+                    Đăng nhập
+                </button>
+                <button id="registerBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-5 rounded-lg shadow-md flex-grow">
+                    Đăng ký
+                </button>
+            </div>
+            <p class="text-red-500 text-sm mt-4 text-center" id="authErrorMsg"></p>
+        </div>
+    </div>
+
+    <!-- Nội dung chính của ứng dụng (Ẩn cho đến khi đăng nhập) -->
+    <main id="mainAppContent" class="flex-grow container mx-auto p-4 grid grid-cols-1 lg:grid-cols-12 gap-6 hidden">
+        
+        <!-- Cột trái: Danh sách ứng dụng (15%) -->
+        <section class="bg-white p-6 rounded-lg shadow-md col-span-1 lg:col-span-2 flex flex-col border border-gray-100">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800">Applications</h2>
+            <button id="addNewAppBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-5 rounded-lg shadow-md mb-4 w-full">
+                Add New Application
+            </button>
+            <div class="my-4">
+                <input type="text" id="searchInput" placeholder="Tìm kiếm ứng dụng..." class="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-500">
+            </div>
+            <div id="applicationsList" class="space-y-3 flex-grow overflow-y-auto pr-2">
+                <div class="text-gray-500 text-center py-4">Loading applications...</div>
+            </div>
+        </section>
+
+        <!-- Cột giữa: Danh sách phiên bản (15%) -->
+        <section class="bg-white p-6 rounded-lg shadow-md col-span-1 lg:col-span-2 flex flex-col border border-gray-100">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-800">Versions for <span id="currentAppName" class="font-bold text-blue-600">No App Selected</span></h2>
+            <button id="showDeletedVersionsBtn" class="bg-red-400 hover:bg-red-500 text-white font-bold py-3 px-5 rounded-lg shadow-md mb-4 w-full">
+                Xem phiên bản đã xóa
+            </button>
+            <div id="versionsList" class="space-y-3 flex-grow overflow-y-auto pr-2">
+                <div class="text-gray-500 text-center py-4">Select an application to see versions.</div>
+            </div>
+        </section>
+
+        <!-- Cột phải: AI Canvas (70%) - Refactored for better visuals -->
+        <section class="bg-white p-8 rounded-xl shadow-2xl col-span-1 lg:col-span-8 flex flex-col border border-gray-100">
+            <h2 class="text-3xl font-bold mb-6 text-gray-800">AI Canvas</h2>
+            
+            <!-- Block 1: Files and Version Info -->
+            <div class="bg-white p-6 rounded-xl shadow-lg border border-gray-200 mb-6">
+                <h3 class="text-xl font-semibold mb-4 text-gray-800">Tệp trong phiên bản đã chọn:</h3>
+                <div id="versionFilesList" class="space-y-2 max-h-48 overflow-y-auto pr-2 border border-gray-200 p-3 rounded-lg bg-gray-50 mb-4 hidden">
+                    <div class="text-gray-500 text-center py-2">Chọn một phiên bản để xem các tệp của nó.</div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div id="fileNameInputGroup" class="hidden">
+                        <label for="fileNameInput" class="block text-gray-700 text-base font-bold mb-2">Tên tệp:</label>
+                        <input type="text" id="fileNameInput" placeholder="e.g., index.html" class="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="versionNotesInput" class="block text-gray-700 text-base font-bold mb-2">Ghi chú phiên bản đã chọn:</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="versionNotesInput" placeholder="Chưa chọn phiên bản" class="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-500" disabled>
+                            <button id="editVersionNotesBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg shadow-md flex-shrink-0" style="min-width: 80px;">Sửa</button>
+                            <button id="saveEditedVersionNotesBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-3 rounded-lg shadow-md hidden flex-shrink-0" style="min-width: 80px;">Lưu</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Block 2: Code Editor -->
+            <div id="editorContainer" class="flex-grow flex flex-col mb-6 bg-white p-6 rounded-xl shadow-lg border border-gray-200 hidden">
+                <label for="editableCodeContent" class="block text-gray-700 text-base font-bold mb-2">Trình soạn thảo:</label>
+                <div class="relative flex-grow shadow-inner border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                    <pre class="absolute inset-0 overflow-y-auto p-4 font-mono text-sm bg-gray-50 text-gray-800 leading-relaxed whitespace-pre-wrap z-10" style="tab-size: 4;"><code id="editableCodeContent" contenteditable="true" class="block min-h-full focus:outline-none" style="caret-color: #3b82f6;"></code></pre>
+                    <div id="editorPlaceholder" class="absolute inset-0 p-4 font-mono text-sm text-gray-400 pointer-events-none z-5">Chọn một tệp, hoặc yêu cầu AI tạo code mới...</div>
+                </div>
+                <!-- NEW: Copy Code button moved here -->
+                <div class="mt-4 flex justify-end">
+                    <button id="copyBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg shadow-md flex-shrink-0 hidden">
+                        Sao chép mã
+                    </button>
+                </div>
+            </div>
+
+            <!-- Block 3: AI Explanation -->
+            <div class="mb-6 bg-white p-6 rounded-xl shadow-lg border border-gray-200 border-l-4 border-purple-500"> <!-- Added border-l for distinction -->
+                <label for="aiExplanationBox" class="block text-gray-700 text-base font-bold mb-2">Giải thích từ AI:</label>
+                <div id="aiExplanationBox" class="w-full h-32 p-4 bg-purple-50 border border-purple-200 rounded-lg overflow-y-auto text-sm text-gray-700 leading-relaxed">
+                    <p class="text-gray-500">Phần giải thích của AI sẽ xuất hiện ở đây...</p>
+                </div>
+            </div>
+            
+            <!-- Block 4: AI Prompt and Send Button -->
+            <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-lg">
+                 <label for="aiPromptInput" class="block text-gray-700 text-base font-bold mb-2">Yêu cầu cho AI:</label>
+                 <textarea id="aiPromptInput" rows="3" class="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-500" placeholder="e.g., 'Thêm bình luận cho hàm này' hoặc 'Tạo một nút bấm màu đỏ'"></textarea>
+                 
+                 <!-- NEW: AI Prompt Suggestions -->
+                 <div class="mt-4">
+                     <div class="flex items-center gap-2 mb-2">
+                        <label class="block text-gray-700 text-sm font-bold">Gợi ý câu lệnh AI:</label>
+                        <button id="toggleAiSuggestionsBtn" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-2 rounded-full">Ẩn</button>
+                     </div>
+                     <div id="aiPromptSuggestions" class="flex flex-wrap gap-2">
+                         <!-- Suggestions will be injected here by JS -->
+                     </div>
+                 </div>
+
+                 <button id="sendToAIButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-5 rounded-lg shadow-md mt-4 w-full flex items-center justify-center gap-2">
+                    <span id="aiButtonText">Gửi tới AI</span>
+                    <div id="aiButtonSpinner" class="spinner hidden"></div>
+                </button>
+            </div>
+
+            <!-- Block 5: Action Buttons -->
+            <div class="mt-6 p-6 bg-white rounded-xl border border-gray-200 shadow-lg">
+                <!-- NEW INPUT FIELD FOR NEW VERSION NOTES -->
+                <div class="mb-4" id="newVersionNotesGroup">
+                    <label for="newVersionNotesInput" class="block text-gray-700 text-base font-bold mb-2">Ghi chú cho phiên bản mới:</label>
+                    <input type="text" id="newVersionNotesInput" placeholder="e.g., 'Refactored with AI'" class="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-500">
+                </div>
+                <!-- END NEW INPUT FIELD -->
+
+                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"> <!-- Adjusted grid-cols-4 to grid-cols-3 -->
+                     <button id="saveVersionBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-5 rounded-lg shadow-md w-full">
+                        Lưu phiên bản mới
+                    </button>
+                    <!-- Removed copyBtn from here -->
+                    <button id="previewBtn" class="bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 px-5 rounded-lg shadow-md w-full">
+                        Chế độ Chỉnh sửa Trực quan
+                    </button>
+                    <!-- NÚT XÓA (Soft Delete) -->
+                    <button id="softDeleteVersionBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-5 rounded-lg shadow-md w-full">
+                        Xóa phiên bản
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Hộp thông báo tùy chỉnh -->
+    <div id="messageBox" class="fixed bottom-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg hidden z-50 transition-opacity duration-300 opacity-0">
+        <span id="messageContent"></span>
+    </div>
+
+    <!-- Modal để thêm ứng dụng mới -->
+    <div id="addNewAppModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h3 class="text-2xl font-bold mb-6 text-gray-800">Add New Application</h3>
+            <div class="mb-4">
+                <label for="newAppNameInput" class="block text-gray-700 text-base font-bold mb-2">Application Name:</label>
+                <input type="text" id="newAppNameInput" placeholder="e.g., 'My Blog App'" class="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-500">
+            </div>
+            <div class="flex justify-end gap-4">
+                <button id="cancelNewAppBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300">Cancel</button>
+                <button id="confirmNewAppBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Add Application</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW: Modal để sửa tên ứng dụng -->
+    <div id="editAppModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h3 class="text-2xl font-bold mb-6 text-gray-800">Sửa tên ứng dụng</h3>
+            <div class="mb-4">
+                <label for="editAppNameInput" class="block text-gray-700 text-base font-bold mb-2">Tên ứng dụng:</label>
+                <input type="text" id="editAppNameInput" class="shadow-sm border border-gray-300 rounded-lg w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-500">
+            </div>
+            <div class="flex justify-end gap-4">
+                <button id="cancelEditAppBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300">Hủy</button>
+                <button id="confirmEditAppBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL XEM TRƯỚC -->
+    <div id="previewModal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div id="previewModalContent" class="bg-white rounded-lg shadow-2xl w-full max-w-4xl flex flex-col"> <!-- Added ID here -->
+            <div class="flex justify-between items-center p-4 border-b border-gray-200">
+                <h3 class="text-xl font-semibold">Bản xem trước</h3>
+                <button id="closePreviewBtn" class="text-gray-500 hover:text-gray-800 text-3xl font-bold">&times;</button>
+            </div>
+            <div class="p-4 flex flex-col items-center flex-grow">
+                <!-- NEW: Preview Mode Buttons -->
+                <div class="mb-4 flex space-x-2">
+                    <button id="mobileViewBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Chế độ di động
+                    </button>
+                    <button id="desktopViewBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        Chế độ desktop
+                    </button>
+                </div>
+                <!-- Container for the iframe to control its width -->
+                <div id="previewFrameContainer" class="w-full">
+                    <iframe id="previewFrame" title="Preview Content"></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PHIÊN BẢN ĐÃ XÓA MỚI -->
+    <div id="deletedVersionsModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <h3 class="text-2xl font-bold mb-6 text-gray-800">Phiên bản đã xóa</h3>
+            <div id="deletedVersionsList" class="space-y-3 flex-grow overflow-y-auto pr-2">
+                <div class="text-gray-500 text-center py-4">Đang tải các phiên bản đã xóa...</div>
+            </div>
+            <div class="flex justify-end gap-4 mt-6">
+                <button id="closeDeletedVersionsModalBtn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- highlight.js JS - Đã di chuyển lên đây để đảm bảo tải trước script module -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+    <!-- Firebase SDK và script tùy chỉnh -->
+    <script type="module">
+        // Import các module cần thiết từ Firebase (sử dụng phiên bản 12.0.0 như yêu cầu)
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, getDocs, getDoc, onSnapshot, query, orderBy, setDoc, updateDoc, deleteDoc, where, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js";
+        
+        // Import Firebase AI SDK
+        import { getAI, getGenerativeModel, GoogleAIBackend } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-ai.js";
+
+        // --- Cấu hình Firebase ---
+        // Đã cập nhật cấu hình Firebase theo yêu cầu của bạn
+        const firebaseConfig = {
+            apiKey: "AIzaSyDn5kQei_GxhUCJ4i1CVytiWla3vqpVGWI",
+            authDomain: "aicodepro.firebaseapp.com",
+            projectId: "aicodepro",
+            storageBucket: "aicodepro.firebasestorage.app",
+            messagingSenderId: "905071307012",
+            appId: "1:905071307012:web:c242d96fb6aa4807154851"
+        };
+
+        // --- Khởi tạo Firebase ---
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        // --- Khởi tạo AI Model thông qua Firebase AI SDK ---
+        let aiModel;
+        try {
+            const ai = getAI(app, { backend: new GoogleAIBackend() });
+            aiModel = getGenerativeModel(ai, { model: "gemini-2.5-flash" });
+            console.log("Generative Model initialized successfully via Firebase AI SDK.");
+        } catch (e) {
+            console.error("Error initializing AI Model:", e);
+            showMessage("Lỗi khởi tạo AI Model. Kiểm tra Console.", 5000);
+        }
+
+        // --- Biến toàn cục và tham chiếu DOM ---
+        let currentAppId = null;
+        let currentAppName = null;
+        let currentVersionId = null; 
+        let userId = null;
+        let allApps = []; // Cache all apps for filtering
+        let chat = null; // **BIẾN MỚI: Lưu trữ phiên trò chuyện với AI**
+        let currentVersionFiles = new Map(); // Store files for the currently selected version to avoid re-fetching
+
+        // NEW: Global variables for visual edit mode
+        let selectedElementInfo = null;
+        let isVisualEditModeActive = false;
+        let currentAppCode = ""; // Store the current full HTML code of the selected file
+
+        // DOM References
+        const elements = {
+            // Auth
+            authSection: document.getElementById('authSection'),
+            mainAppContent: document.getElementById('mainAppContent'),
+            emailInput: document.getElementById('emailInput'),
+            passwordInput: document.getElementById('passwordInput'),
+            loginBtn: document.getElementById('loginBtn'),
+            registerBtn: document.getElementById('registerBtn'),
+            logoutBtn: document.getElementById('logoutBtn'),
+            userEmailDisplay: document.getElementById('userEmailDisplay'),
+            authErrorMsg: document.getElementById('authErrorMsg'),
+            // App & Version Lists
+            applicationsList: document.getElementById('applicationsList'),
+            versionsList: document.getElementById('versionsList'),
+            currentAppNameSpan: document.getElementById('currentAppName'),
+            searchInput: document.getElementById('searchInput'),
+            // AI Canvas & Editor
+            versionFilesList: document.getElementById('versionFilesList'),
+            fileNameInput: document.getElementById('fileNameInput'),
+            fileNameInputGroup: document.getElementById('fileNameInputGroup'), // NEW
+            versionNotesInput: document.getElementById('versionNotesInput'), // repurposed
+            editVersionNotesBtn: document.getElementById('editVersionNotesBtn'),
+            saveEditedVersionNotesBtn: document.getElementById('saveEditedVersionNotesBtn'),
+            newVersionNotesInput: document.getElementById('newVersionNotesInput'), // new input for new version
+            newVersionNotesGroup: document.getElementById('newVersionNotesGroup'), // NEW: the div containing new version notes
+            editorContainer: document.getElementById('editorContainer'),
+            editableCodeContent: document.getElementById('editableCodeContent'),
+            editorPlaceholder: document.getElementById('editorPlaceholder'),
+            aiPromptInput: document.getElementById('aiPromptInput'),
+            sendToAIButton: document.getElementById('sendToAIButton'),
+            aiButtonText: document.getElementById('aiButtonText'),
+            aiButtonSpinner: document.getElementById('aiButtonSpinner'),
+            aiExplanationBox: document.getElementById('aiExplanationBox'),
+            aiPromptSuggestionsContainer: document.getElementById('aiPromptSuggestions'),
+            toggleAiSuggestionsBtn: document.getElementById('toggleAiSuggestionsBtn'), // NEW: Toggle button for AI suggestions
+            // Actions
+            saveVersionBtn: document.getElementById('saveVersionBtn'),
+            copyBtn: document.getElementById('copyBtn'),
+            previewBtn: document.getElementById('previewBtn'),
+            softDeleteVersionBtn: document.getElementById('softDeleteVersionBtn'),
+            // Modals & Messages
+            messageBox: document.getElementById('messageBox'),
+            messageContent: document.getElementById('messageContent'),
+            addNewAppBtn: document.getElementById('addNewAppBtn'),
+            addNewAppModal: document.getElementById('addNewAppModal'),
+            newAppNameInput: document.getElementById('newAppNameInput'),
+            confirmNewAppBtn: document.getElementById('confirmNewAppBtn'),
+            cancelNewAppBtn: document.getElementById('cancelNewAppBtn'),
+            previewModal: document.getElementById('previewModal'),
+            closePreviewBtn: document.getElementById('closePreviewBtn'),
+            previewFrame: document.getElementById('previewFrame'),
+            showDeletedVersionsBtn: document.getElementById('showDeletedVersionsBtn'),
+            deletedVersionsModal: document.getElementById('deletedVersionsModal'),
+            deletedVersionsList: document.getElementById('deletedVersionsList'),
+            closeDeletedVersionsModalBtn: document.getElementById('closeDeletedVersionsModalBtn'),
+            // NEW: Preview mode elements
+            mobileViewBtn: document.getElementById('mobileViewBtn'),
+            desktopViewBtn: document.getElementById('desktopViewBtn'),
+            previewFrameContainer: document.getElementById('previewFrameContainer'),
+            previewModalContent: document.getElementById('previewModalContent'), // NEW: Add this
+            // NEW: Edit App Modal elements
+            editAppModal: document.getElementById('editAppModal'),
+            editAppNameInput: document.getElementById('editAppNameInput'),
+            confirmEditAppBtn: document.getElementById('confirmEditAppBtn'),
+            cancelEditAppBtn: document.getElementById('cancelEditAppBtn'),
+        };
+
+        const mainCodeEditor = elements.editableCodeContent; // Map lại biến cũ `mainCodeEditor` vào element mới
+
+        const aiPromptSuggestions = [
+            "Tạo cho tôi một ứng dụng web viết bằng html tích hợp js và css. Giao diện TailwindCss hiện đại. Nội dung của nó là:",
+            "Thêm CSS để căn giữa nội dung trang và đặt màu nền là màu xanh nhạt (#e0f7fa).",
+            "Viết JavaScript để khi click nút 'Click me' sẽ hiển thị thông báo 'Bạn đã click!'",
+            "Giải thích đoạn mã HTML/CSS/JS này hoạt động như thế nào.",
+            "Tối ưu hóa mã nguồn này để nó chạy nhanh hơn và dễ đọc hơn."
+        ];
+
+        // Elements to hide initially and when visual mode is active
+        const elementsToHideInVisualMode = [
+            elements.editorContainer,
+            elements.versionFilesList,
+            elements.fileNameInputGroup, // Hide the whole input group
+            elements.saveVersionBtn, 
+            elements.copyBtn,
+            elements.softDeleteVersionBtn,
+            elements.newVersionNotesGroup // Hide the new version notes input group
+        ];
+
+        // --- highlight.js script ---
+        function applyHighlighting() {
+            if (typeof hljs === 'undefined') return;
+
+            // Xóa tất cả các lớp ngôn ngữ cũ để tránh xung đột
+            mainCodeEditor.className = mainCodeEditor.className.split(' ')
+                                     .filter(cls => !cls.startsWith('language-'))
+                                     .join(' ');
+
+            const filename = elements.fileNameInput.value.trim();
+            let langClass = '';
+
+            // Gán lớp ngôn ngữ dựa trên phần mở rộng của tên tệp
+            if (filename.endsWith('.html') || filename.endsWith('.htm')) {
+                langClass = 'language-xml'; // highlight.js sử dụng 'xml' cho HTML
+            } else if (filename.endsWith('.css')) {
+                langClass = 'language-css';
+            } else if (filename.endsWith('.js') || filename.endsWith('.json')) {
+                langClass = 'language-javascript'; // hoặc 'json'
+            } else {
+                // Mặc định là HTML (xml) hoặc văn bản thuần nếu không có phần mở rộng cụ thể
+                // Thường thì AI sẽ trả về hỗn hợp HTML/JS/CSS, nên 'xml' là một lựa chọn chung tốt.
+                langClass = 'language-xml'; 
+            }
+            
+            if (langClass) {
+                mainCodeEditor.classList.add(langClass);
+            }
+
+            hljs.highlightElement(mainCodeEditor); 
+        }
+
+        // --- Hàm tiện ích ---
+        function showMessage(message, duration = 3000) {
+            elements.messageContent.textContent = message;
+            elements.messageBox.classList.remove('hidden', 'opacity-0');
+            elements.messageBox.classList.add('opacity-100');
+            setTimeout(() => {
+                elements.messageBox.classList.remove('opacity-100');
+                elements.messageBox.classList.add('opacity-0');
+                setTimeout(() => elements.messageBox.classList.add('hidden'), 300);
+            }, duration);
+        }
+
+        function showAuthError(message) {
+            elements.authErrorMsg.textContent = message;
+        }
+
+        // --- Logic Placeholder cho trình soạn thảo ---
+        function toggleEditorPlaceholder() {
+            if (mainCodeEditor.textContent.trim() === '') {
+                elements.editorPlaceholder.style.display = 'block';
+            } else {
+                elements.editorPlaceholder.style.display = 'none';
+            }
+        }
+
+        // NEW: Hàm render gợi ý câu lệnh AI
+        function renderAiPromptSuggestions() {
+            elements.aiPromptSuggestionsContainer.innerHTML = '';
+            const fragment = document.createDocumentFragment();
+            aiPromptSuggestions.forEach(prompt => {
+                const button = document.createElement('button');
+                button.textContent = prompt;
+                button.className = 'bg-blue-100 hover:bg-blue-200 text-blue-800 text-xs py-1 px-3 rounded-full transition duration-200 cursor-pointer border border-blue-200 whitespace-nowrap overflow-hidden text-ellipsis';
+                button.title = prompt;
+                button.dataset.prompt = prompt; // Use dataset for click handler
+                fragment.appendChild(button);
+            });
+            elements.aiPromptSuggestionsContainer.appendChild(fragment);
+        }
+
+        // NEW: Hàm ẩn/hiện gợi ý AI
+        function toggleAiSuggestions() {
+            elements.aiPromptSuggestionsContainer.classList.toggle('hidden');
+            if (elements.aiPromptSuggestionsContainer.classList.contains('hidden')) {
+                elements.toggleAiSuggestionsBtn.textContent = 'Hiện';
+            } else {
+                elements.toggleAiSuggestionsBtn.textContent = 'Ẩn';
+            }
+        }
+
+        // NEW: Function to toggle elements visibility based on mode
+        function toggleVisualEditModeUI(active) {
+            isVisualEditModeActive = active;
+            if (active) {
+                elementsToHideInVisualMode.forEach(el => el.classList.add('hidden'));
+                elements.aiPromptInput.placeholder = 'Bạn muốn thay đổi gì trên trang hoặc yếu tố đã chọn?';
+                elements.sendToAIButton.disabled = false;
+            } else {
+                elementsToHideInVisualMode.forEach(el => el.classList.remove('hidden'));
+                elements.aiPromptInput.placeholder = "e.g., 'Thêm bình luận cho hàm này' hoặc 'Tạo một nút bấm màu đỏ'";
+                elements.sendToAIButton.disabled = false; // Ensure enabled
+                selectedElementInfo = null; // Clear selected element
+            }
+        }
+
+        // --- Xác thực Firebase ---
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                userId = user.uid;
+                elements.userEmailDisplay.textContent = user.email || "Anonymous";
+                elements.userEmailDisplay.classList.remove('hidden');
+                elements.logoutBtn.classList.remove('hidden');
+                elements.authSection.classList.add('hidden');
+                elements.mainAppContent.classList.remove('hidden');
+                elements.mainAppContent.classList.add('grid');
+                loadApplications();
+                toggleEditorPlaceholder();
+                renderAiPromptSuggestions();
+                // Ensure UI is set to default (non-visual mode) on login
+                toggleVisualEditModeUI(false); 
+            } else {
+                userId = null;
+                elements.userEmailDisplay.classList.add('hidden');
+                elements.logoutBtn.classList.add('hidden');
+                elements.authSection.classList.remove('hidden');
+                elements.mainAppContent.classList.add('hidden');
+                elements.mainAppContent.classList.remove('grid');
+            }
+        });
+
+        // --- Các hàm xác thực ---
+        const handleAuth = async (isRegister) => {
+            const email = elements.emailInput.value.trim();
+            const password = elements.passwordInput.value.trim();
+            if (!email || !password) {
+                return showAuthError("Vui lòng nhập email và mật khẩu.");
+            }
+            try {
+                if (isRegister) {
+                    await createUserWithEmailAndPassword(auth, email, password);
+                    showMessage("Đăng ký thành công!");
+                } else {
+                    await signInWithEmailAndPassword(auth, email, password);
+                    showMessage("Đăng nhập thành công!");
+                }
+                showAuthError(''); // Clear error message on success
+            } catch (error) {
+                showAuthError(error.message);
+            }
+        };
+
+        const handleLogout = () => signOut(auth).then(() => showMessage("Đã đăng xuất."));
+
+        // --- Logic Firestore ---
+        const getCollections = {
+            applications: () => collection(db, `users/${userId}/applications`),
+            versions: (appId) => collection(db, `users/${userId}/applications/${appId}/versions`),
+            files: (appId, versionId) => collection(db, `users/${userId}/applications/${appId}/versions/${versionId}/files`)
+        };
+
+        const getFilesForVersion = async (appId, versionId) => {
+            const files = new Map();
+            let currentId = versionId;
+            while (currentId) {
+                const versionRef = doc(db, `users/${userId}/applications/${appId}/versions/${currentId}`);
+                const versionSnap = await getDoc(versionRef);
+                if (!versionSnap.exists()) break;
+                const versionData = versionSnap.data();
+                
+                const filesQuery = query(getCollections.files(appId, currentId));
+                const filesSnapshot = await getDocs(filesQuery);
+                filesSnapshot.forEach(fileDoc => {
+                    const fileData = fileDoc.data();
+                    if (!files.has(fileData.filename)) {
+                        files.set(fileData.filename, { ...fileData, id: fileDoc.id, versionId: currentId });
+                    }
+                });
+
+                currentId = versionData.parentVersionId || null;
+            }
+            return files;
+        };
+
+        // --- Các hàm render giao diện ---
+        const renderApplications = (appsToRender) => {
+            elements.applicationsList.innerHTML = '';
+            if (appsToRender.length === 0) {
+                elements.applicationsList.innerHTML = '<div class="text-gray-500 text-center py-4">Chưa có ứng dụng nào.</div>';
+                return;
+            }
+            const fragment = document.createDocumentFragment();
+            appsToRender.forEach((appData, index) => {
+                const appItem = document.createElement('div');
+                appItem.className = 'list-item bg-white hover:bg-blue-50 p-3 rounded-lg cursor-pointer transition duration-200 shadow-sm flex justify-between items-center';
+                if (appData.id === currentAppId) appItem.classList.add('selected');
+                appItem.dataset.appId = appData.id;
+                appItem.dataset.appName = appData.name;
+                appItem.innerHTML = `
+                    <div class="flex-grow font-medium text-gray-700 overflow-hidden text-ellipsis whitespace-nowrap">${index + 1}. ${appData.name}</div>
+                    <div class="flex-shrink-0 flex gap-0.5"> <!-- Changed gap-1 to gap-0.5 -->
+                        <button class="edit-app-btn bg-yellow-400 hover:bg-yellow-500 text-white text-xs font-bold py-0.5 px-1.5 rounded-md transition duration-200" title="Sửa">Sửa</button> <!-- Changed py-1 px-2 to py-0.5 px-1.5 -->
+                        <button class="delete-app-btn bg-red-400 hover:bg-red-500 text-white text-xs font-bold py-0.5 px-1.5 rounded-md transition duration-200" title="Xóa">Xóa</button> <!-- Changed py-1 px-2 to py-0.5 px-1.5 -->
+                    </div>
+                `;
+                fragment.appendChild(appItem);
+            });
+            elements.applicationsList.appendChild(fragment);
+        };
+
+        const loadApplications = () => {
+            if (!userId) return;
+            const q = query(getCollections.applications(), orderBy('createdAt', 'desc'));
+            onSnapshot(q, (snapshot) => {
+                allApps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderApplications(allApps);
+            }, (error) => console.error("Error loading applications:", error));
+        };
+
+        const selectApplication = (appId, appName) => {
+            currentAppId = appId;
+            currentAppName = appName;
+            currentVersionId = null;
+            chat = null;
+            currentVersionFiles.clear(); // Clear cached files
+
+            elements.currentAppNameSpan.textContent = appName; // FIX: Update app name display
+
+            document.querySelectorAll('#applicationsList > div').forEach(el => el.classList.remove('selected'));
+            document.querySelector(`#applicationsList [data-app-id="${appId}"]`)?.classList.add('selected');
+
+            loadVersions(appId);
+            mainCodeEditor.textContent = '';
+            applyHighlighting();
+            toggleEditorPlaceholder();
+            elements.fileNameInput.value = '';
+            elements.versionNotesInput.value = ''; // Clear selected version notes
+            elements.versionNotesInput.disabled = true; // Disable it
+            elements.editVersionNotesBtn.classList.remove('hidden'); // Show edit
+            elements.saveEditedVersionNotesBtn.classList.add('hidden'); // Hide save
+            elements.newVersionNotesInput.value = ''; // Clear new version notes
+            elements.versionFilesList.innerHTML = '<div class="text-gray-500 text-center py-2">Chọn một phiên bản để xem tệp.</div>';
+            elements.aiExplanationBox.innerHTML = '<p class="text-gray-500">Phần giải thích của AI sẽ xuất hiện ở đây...</p>';
+            elements.aiPromptInput.value = '';
+            toggleVisualEditModeUI(false); // Reset to default view (non-visual mode)
+        };
+
+        const loadVersions = (appId) => {
+            if (!userId || !appId) return;
+            const q = query(getCollections.versions(appId), where('deleted', '!=', true), orderBy('timestamp', 'desc'));
+            onSnapshot(q, (snapshot) => {
+                elements.versionsList.innerHTML = '';
+                if (snapshot.empty) {
+                    elements.versionsList.innerHTML = '<div class="text-gray-500 text-center py-4">Chưa có phiên bản nào.</div>';
+                    return;
+                }
+                const fragment = document.createDocumentFragment();
+                snapshot.forEach(doc => {
+                    const version = doc.data();
+                    const versionItem = document.createElement('div');
+                    versionItem.className = 'list-item bg-white hover:bg-blue-50 p-3 rounded-lg cursor-pointer transition duration-200 shadow-sm';
+                    if (doc.id === currentVersionId) versionItem.classList.add('selected');
+                    const date = new Date(version.timestamp).toLocaleString();
+                    versionItem.innerHTML = `
+                        <p class="font-medium text-gray-700">Phiên bản: ${version.versionIndex || 'N/A'}</p>
+                        <p class="text-sm text-gray-500">${version.notes || 'Không có ghi chú'}</p>
+                        <p class="text-xs text-gray-400">${date}</p>`;
+                    versionItem.dataset.versionId = doc.id;
+                    fragment.appendChild(versionItem);
+                });
+                elements.versionsList.appendChild(fragment);
+            });
+        };
+
+        const selectVersion = async (appId, versionId) => {
+            currentVersionId = versionId;
+            chat = null; // Reset chat session
+            elements.aiPromptInput.value = ''; // Reset AI prompt input
+
+            document.querySelectorAll('#versionsList > div').forEach(el => el.classList.remove('selected'));
+            document.querySelector(`#versionsList [data-version-id="${versionId}"]`)?.classList.add('selected');
+
+            elements.versionFilesList.innerHTML = '<div class="text-gray-500 text-center py-2">Đang tải tệp...</div>';
+            elements.aiExplanationBox.innerHTML = '<p class="text-gray-500">Phần giải thích của AI sẽ xuất hiện ở đây...</p>';
+
+            try {
+                // Fetch version notes first
+                const versionRef = doc(db, `users/${userId}/applications/${appId}/versions/${versionId}`);
+                const versionSnap = await getDoc(versionRef);
+                if (versionSnap.exists()) {
+                    const versionData = versionSnap.data();
+                    elements.versionNotesInput.value = versionData.notes || 'Không có ghi chú';
+                } else {
+                    elements.versionNotesInput.value = 'Phiên bản không tồn tại.';
+                }
+                elements.versionNotesInput.disabled = true; // Make it disabled by default
+                elements.editVersionNotesBtn.classList.remove('hidden'); // Show edit button
+                elements.saveEditedVersionNotesBtn.classList.add('hidden'); // Hide save button
+
+                elements.newVersionNotesInput.value = ''; // Clear new version notes input when selecting existing version.
+
+                // Existing file loading logic...
+                currentVersionFiles = await getFilesForVersion(appId, versionId);
+                elements.versionFilesList.innerHTML = '';
+                if (currentVersionFiles.size > 0) {
+                    const sortedFiles = Array.from(currentVersionFiles.values()).sort((a, b) => a.filename.localeCompare(b.filename));
+                    const fragment = document.createDocumentFragment();
+                    sortedFiles.forEach(fileData => {
+                        const fileItem = document.createElement('div');
+                        fileItem.className = 'list-item bg-white hover:bg-blue-50 p-2 rounded-lg cursor-pointer transition duration-200 shadow-sm text-sm';
+                        fileItem.textContent = fileData.filename;
+                        fileItem.dataset.filename = fileData.filename; // Store filename for click delegation
+                        fragment.appendChild(fileItem);
+                    });
+                    elements.versionFilesList.appendChild(fragment);
+                } else {
+                    elements.versionFilesList.innerHTML = '<div class="text-gray-500 text-center py-2">Không tìm thấy tệp nào.</div>';
+                }
+                toggleVisualEditModeUI(false); // Reset to default view (non-visual mode)
+            }
+            catch (error) {
+                console.error("Error loading files or version notes for version:", error);
+                elements.versionFilesInput.value = '<div class="text-red-500 text-center py-2">Lỗi khi tải tệp.</div>';
+                elements.versionNotesInput.value = 'Lỗi khi tải ghi chú.';
+            }
+        };
+
+        const loadFileIntoEditor = (filename) => {
+            const fileData = currentVersionFiles.get(filename);
+            if (fileData) {
+                elements.fileNameInput.value = fileData.filename;
+                mainCodeEditor.textContent = fileData.content;
+                applyHighlighting();
+                toggleEditorPlaceholder();
+                showMessage(`Đã tải ${fileData.filename} vào trình soạn thảo.`);
+                chat = null;
+                elements.aiExplanationBox.innerHTML = '<p class="text-gray-500">Phần giải thích của AI sẽ xuất hiện ở đây...</p>';
+                toggleVisualEditModeUI(false); // Ensure regular editor is visible when a file is loaded
+            }
+        };
+
+        // --- Logic AI Canvas (Sử dụng Firebase AI SDK với ngữ cảnh hội thoại) ---
+        // NEW: Injected script for iframe interaction
+        const injectedScript = `
+            const highlightStyle = \`
+                .highlight-element {
+                    outline: 2px solid #3b82f6; /* Blue border */
+                    outline-offset: 2px;
+                    cursor: pointer;
+                }
+            \`;
+            
+            const styleEl = document.createElement('style');
+            styleEl.textContent = highlightStyle;
+            document.head.appendChild(styleEl);
+
+            let hoveredElement = null;
+            let selectedElement = null;
+
+            function highlight(el, isSelected = false) {
+                if (el && el.nodeType === 1) { // Ensure it's an element node
+                    el.classList.add('highlight-element');
+                }
+            }
+
+            function unhighlight(el) {
+                if (el && el.nodeType === 1) {
+                    el.classList.remove('highlight-element');
+                }
+            }
+
+            function getElementPath(el) {
+                let path = [];
+                while (el && el.nodeType === 1 && el !== document.body) {
+                    let selector = el.tagName.toLowerCase();
+                    if (el.id) {
+                        selector += '#' + el.id;
+                    } else {
+                        let sib = el, nth = 1;
+                        while ((sib = sib.previousElementSibling)) {
+                            if (sib.tagName === el.tagName) nth++;
+                        }
+                        if (nth > 1) selector += ':nth-child(' + nth + ')';
+                    }
+                    path.unshift(selector);
+                    el = el.parentNode;
+                }
+                return path.join(' > ');
+            }
+
+            document.body.addEventListener('mouseover', (e) => {
+                const target = e.target;
+                if (target && target !== document.body && target !== document.documentElement && target !== hoveredElement && target !== selectedElement) {
+                    unhighlight(hoveredElement);
+                    hoveredElement = target;
+                    highlight(hoveredElement);
+                }
+            });
+
+            document.body.addEventListener('mouseout', (e) => {
+                if (hoveredElement && hoveredElement !== selectedElement) {
+                    unhighlight(hoveredElement);
+                    hoveredElement = null;
+                }
+            });
+
+            document.body.addEventListener('click', (e) => {
+                e.preventDefault(); // Prevent default link behavior, etc.
+                e.stopPropagation(); // Stop event propagation
+
+                if (selectedElement) {
+                    unhighlight(selectedElement);
+                }
+                selectedElement = e.target;
+                highlight(selectedElement, true);
+
+                const elementInfo = {
+                    outerHTML: selectedElement.outerHTML,
+                    selectorPath: getElementPath(selectedElement),
+                    tagName: selectedElement.tagName.toLowerCase(),
+                    id: selectedElement.id || null,
+                    classes: Array.from(selectedElement.classList),
+                    innerText: selectedElement.innerText.substring(0, Math.min(selectedElement.innerText.length, 100)) + (selectedElement.innerText.length > 100 ? '...' : '') // Snippet
+                };
+                window.parent.postMessage({ type: 'elementSelected', payload: elementInfo }, '*');
+            });
+
+            // Ensure previously selected element is highlighted if coming back from refresh
+            window.addEventListener('load', () => {
+                window.parent.postMessage({ type: 'iframeLoaded' }, '*');
+            });
+        `;
+
+        const callAI = async () => {
+            if (!aiModel) {
+                return showMessage("Mô hình AI chưa sẵn sàng.", 3000);
+            }
+            const userPrompt = elements.aiPromptInput.value.trim();
+            if (!userPrompt) return showMessage("Vui lòng nhập yêu cầu cho AI.");
+
+            // Check if there's any code loaded
+            currentAppCode = mainCodeEditor.textContent.trim();
+            if (!currentAppCode) {
+                 return showMessage("Vui lòng tải một tệp hoặc tạo mã mới trước khi gửi cho AI.", 3000);
+            }
+
+            elements.aiButtonText.textContent = 'AI đang tạo code cho bạn... vui lòng đợi tới khi hoàn thành';
+            elements.aiButtonSpinner.classList.remove('hidden');
+            elements.sendToAIButton.disabled = true;
+
+            try {
+                let aiInstruction = `Bạn là một trợ lý lập trình chuyên nghiệp. Hãy trả lời theo định dạng sau: Đầu tiên, đưa ra lời giải thích ngắn gọn. Sau đó, thêm một dòng chỉ chứa dấu phân cách '---CODE---'. Cuối cùng, chỉ cung cấp khối mã HTML hoàn chỉnh, sạch sẽ mà không có bất kỳ định dạng markdown nào khác.`;
+                
+                let promptContent = `Mã nguồn HTML đầy đủ của trang là:\n---\n${currentAppCode}`;
+
+                if (isVisualEditModeActive && selectedElementInfo) {
+                    aiInstruction += `\n\nBạn đang ở chế độ chỉnh sửa trực quan. Người dùng đã chọn một yếu tố HTML trên trang.
+                    Thông tin chi tiết về yếu tố được chọn:
+                    - outerHTML (mã HTML gốc của yếu tố): \n\`\`\`html\n${selectedElementInfo.outerHTML}\n\`\`\`
+                    - selectorPath (đường dẫn CSS): \`${selectedElementInfo.selectorPath}\`
+                    - tagName: \`${selectedElementInfo.tagName}\`
+                    - id: \`${selectedElementInfo.id || 'Không có'}\`
+                    - classes: \`${selectedElementInfo.classes.join(' ') || 'Không có'}\`
+                    - innerText snippet: \`${selectedElementInfo.innerText}\`
+
+                    Yêu cầu của người dùng là: "${userPrompt}".
+                    
+                    Vui lòng thực hiện thay đổi TRỰC TIẾP và CHỈ trên yếu tố được chọn này trong ngữ cảnh của mã nguồn HTML đầy đủ được cung cấp. Đảm bảo rằng CẤU TRÚC HTML TỔNG THỂ và các yếu tố KHÁC trên trang vẫn được GIỮ NGUYÊN.
+                    Trả về TOÀN BỘ mã nguồn HTML ĐÃ CẬP NHẬT của trang.`;
+                } else {
+                    // Standard code editing mode
+                    aiInstruction += `\n\nYêu cầu của người dùng là: "${userPrompt}".
+                    Vui lòng xem xét mã nguồn được cung cấp và thực hiện yêu cầu. Trả về mã nguồn đã sửa đổi.`;
+                }
+                
+                // Always start a new chat for each AI call to ensure fresh context,
+                // especially important for targeted edits where full document context is provided repeatedly.
+                chat = aiModel.startChat({
+                    history: [{
+                        role: "user",
+                        parts: [{ text: aiInstruction }]
+                    }]
+                });
+
+                const result = await chat.sendMessage(promptContent); // Send the actual content to be processed
+                const fullResponseText = result.response.text();
+
+                const separator = '---CODE---';
+                let explanation = "AI không cung cấp giải thích cho lần này.";
+                let code = fullResponseText;
+
+                if (fullResponseText.includes(separator)) {
+                    const parts = fullResponseText.split(separator);
+                    explanation = parts[0].trim();
+                    code = parts.slice(1).join(separator).trim();
+                }
+                
+                elements.aiExplanationBox.innerHTML = explanation.replace(/\n/g, '<br>');
+                mainCodeEditor.textContent = code; // Update the hidden editor with the full new code
+                applyHighlighting(); // Re-highlight
+                toggleEditorPlaceholder();
+                elements.aiPromptInput.value = '';
+                
+                // IMPORTANT: Refresh preview and automatically save a new version
+                if (isVisualEditModeActive) {
+                    // Reconstruct srcdoc with the new code, including the injected script
+                    const fullSrcDoc = `
+                        <!DOCTYPE html>
+                        <html lang="vi">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <title>Preview</title>
+                            <script>${injectedScript}</script>
+                        </head>
+                        <body>
+                            ${code}
+                        </body>
+                        </html>
+                    `;
+                    elements.previewFrame.srcdoc = fullSrcDoc; // Re-render iframe with new content
+
+                    // Automatic save after successful AI edit
+                    await saveVersion(true, `AI chỉnh sửa trực quan: ${userPrompt.substring(0, 50)}...`); // Pass true for AI-triggered, and the default note
+                } else {
+                    // If not in visual mode, just show message
+                    showMessage("AI đã cập nhật mã và cung cấp giải thích.");
+                }
+
+
+            } catch (error) {
+                console.error("Error calling AI via Firebase:", error);
+                showMessage(`Lỗi khi gọi AI: ${error.message}`, 5000);
+                chat = null; // Reset chat on error
+            } finally {
+                elements.aiButtonText.textContent = 'Gửi tới AI';
+                elements.aiButtonSpinner.classList.add('hidden');
+                elements.sendToAIButton.disabled = false;
+            }
+        };
+
+        // --- Các hàm hành động ---
+        // Modified saveVersion to accept an optional 'aiTriggered' flag and notes
+        const saveVersion = async (aiTriggered = false, aiNotes = '') => {
+            if (!userId || !currentAppId) return showMessage('Vui lòng chọn một ứng dụng.');
+            let filename = elements.fileNameInput.value.trim(); 
+            let content = mainCodeEditor.textContent; 
+            let versionNotes = aiTriggered ? aiNotes : elements.newVersionNotesInput.value.trim();
+            
+            // In visual mode, filename is not directly editable by user, so we default to 'index.html'
+            if (isVisualEditModeActive && !filename) {
+                filename = "index.html"; 
+            }
+            if (!filename || !content) {
+                return showMessage(`Tên tệp và nội dung không được để trống.`);
+            }
+
+            try {
+                const versionsQuery = query(getCollections.versions(currentAppId), where('deleted', '!=', true));
+                const versionsSnapshot = await getDocs(versionsQuery);
+                const newVersionIndex = versionsSnapshot.size + 1;
+
+                const newVersionRef = await addDoc(getCollections.versions(currentAppId), {
+                    versionIndex: newVersionIndex,
+                    notes: versionNotes || 'Thay đổi từ AI Canvas', 
+                    timestamp: Date.now(),
+                    parentVersionId: currentVersionId,
+                    deleted: false
+                });
+
+                // Store the file content under the new version
+                await addDoc(getCollections.files(currentAppId, newVersionRef.id), {
+                    filename,
+                    content
+                });
+                
+                showMessage(`Phiên bản mới (v${newVersionIndex}) đã được lưu thành công!`);
+                
+                // In visual mode, we don't clear the editor as it's kept in sync with the preview.
+                // We also don't clear filenameInput or newVersionNotesInput for manual saving.
+                if (!aiTriggered) {
+                    mainCodeEditor.textContent = ''; 
+                    applyHighlighting();
+                    toggleEditorPlaceholder();
+                    elements.fileNameInput.value = '';
+                    elements.newVersionNotesInput.value = '';
+                }
+
+                elements.aiPromptInput.value = '';
+                elements.aiExplanationBox.innerHTML = '<p class="text-gray-500">Phần giải thích của AI sẽ xuất hiện ở đây...</p>';
+                chat = null; // Reset chat after saving a new version to start fresh for the next edit.
+                
+                // After saving, make this new version the 'currentVersionId'
+                currentVersionId = newVersionRef.id;
+                // Re-load versions to show the new one as selected
+                loadVersions(currentAppId);
+
+            } catch (error) {
+                console.error("Error saving version:", error);
+                showMessage('Lưu phiên bản thất bại.', 5000);
+            }
+        };
+
+        const addNewApplication = async () => {
+            if (!userId) return;
+            const appName = elements.newAppNameInput.value.trim();
+            if (!appName) return showMessage('Tên ứng dụng không được để trống.');
+            try {
+                await addDoc(getCollections.applications(), { 
+                    name: appName, 
+                    createdAt: Date.now()
+                });
+                showMessage(`Ứng dụng "${appName}" đã được thêm!`);
+                hideAddNewAppModal();
+            }
+            catch (error) {
+                console.error("Error adding new application:", error);
+                showMessage('Thêm ứng dụng mới thất bại.', 5000);
+            }
+        };
+        
+        const showAddNewAppModal = () => {
+            if (!userId) return showMessage('Vui lòng đăng nhập để thêm ứng dụng.');
+            elements.newAppNameInput.value = '';
+            elements.addNewAppModal.classList.remove('hidden');
+        };
+
+        const hideAddNewAppModal = () => elements.addNewAppModal.classList.add('hidden');
+
+        // NEW: Function to handle setting the preview mode
+        const setPreviewMode = (mode) => {
+            if (mode === 'mobile') {
+                elements.previewFrameContainer.classList.add('mobile-view');
+                elements.previewModalContent.classList.remove('desktop-mode-active'); 
+
+                elements.mobileViewBtn.classList.remove('bg-gray-300', 'text-gray-800');
+                elements.mobileViewBtn.classList.add('bg-blue-500', 'text-white');
+                elements.desktopViewBtn.classList.remove('bg-blue-500', 'text-white');
+                elements.desktopViewBtn.classList.add('bg-gray-300', 'text-gray-800');
+            } else { // 'desktop'
+                elements.previewFrameContainer.classList.remove('mobile-view');
+                elements.previewModalContent.classList.add('desktop-mode-active'); 
+
+                elements.desktopViewBtn.classList.remove('bg-gray-300', 'text-gray-800');
+                elements.desktopViewBtn.classList.add('bg-blue-500', 'text-white');
+                elements.mobileViewBtn.classList.remove('bg-blue-500', 'text-white');
+                elements.mobileViewBtn.classList.add('bg-gray-300', 'text-gray-800');
+            }
+        };
+
+        const showPreview = () => {
+            currentAppCode = mainCodeEditor.textContent; // Get the code from the editor
+            if (!currentAppCode) {
+                return showMessage("Không có mã trong trình soạn thảo để xem trước.", 3000);
+            }
+
+            // Construct the full srcdoc with injected script and actual content
+            // The script must run *before* the body content is fully parsed for event listeners to attach properly.
+            const fullSrcDoc = `
+                <!DOCTYPE html>
+                <html lang="vi">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>Preview</title>
+                    <script>${injectedScript}</script>
+                </head>
+                <body>
+                    ${currentAppCode}
+                </body>
+                </html>
+            `;
+
+            elements.previewFrame.srcdoc = fullSrcDoc;
+            elements.previewModal.classList.remove('hidden');
+            toggleVisualEditModeUI(true); // Activate visual mode UI
+            setPreviewMode('desktop'); // Set default view to desktop when modal opens
+        };
+
+        const closePreview = () => {
+            elements.previewModal.classList.add('hidden');
+            elements.previewFrame.srcdoc = ''; // Clear iframe content
+            toggleVisualEditModeUI(false); // Deactivate visual mode UI
+            selectedElementInfo = null; // Clear selected element info
+            elements.aiPromptInput.placeholder = "e.g., 'Thêm bình luận cho hàm này' hoặc 'Tạo một nút bấm màu đỏ'"; // Reset placeholder
+        };
+
+
+        const copyCode = () => {
+            const codeToCopy = mainCodeEditor.textContent;
+            if (!codeToCopy) {
+                return showMessage("Không có mã trong trình soạn thảo để sao chép.", 3000);
+            }
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = codeToCopy;
+            document.body.appendChild(tempTextArea);
+            tempTextArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempTextArea);
+            showMessage('Mã đã được sao chép vào clipboard!');
+        };
+
+        // NEW: Edit and Save functions for selected version notes
+        const editSelectedVersionNotes = () => {
+            if (!currentVersionId) {
+                return showMessage('Vui lòng chọn một phiên bản để sửa ghi chú.', 3000);
+            }
+            elements.versionNotesInput.disabled = false;
+            elements.editVersionNotesBtn.classList.add('hidden');
+            elements.saveEditedVersionNotesBtn.classList.remove('hidden');
+            elements.versionNotesInput.focus();
+        };
+
+        const saveEditedVersionNotes = async () => {
+            if (!userId || !currentAppId || !currentVersionId) {
+                return showMessage('Không thể lưu. Vui lòng chọn một phiên bản.', 3000);
+            }
+            const newNotes = elements.versionNotesInput.value.trim();
+            if (!newNotes) {
+                return showMessage('Ghi chú không được để trống.', 3000);
+            }
+
+            try {
+                const versionRef = doc(db, `users/${userId}/applications/${currentAppId}/versions/${currentVersionId}`);
+                await updateDoc(versionRef, {
+                    notes: newNotes,
+                    timestamp: Date.now() // Update timestamp to reflect change, optional
+                });
+                showMessage('Ghi chú phiên bản đã được cập nhật!');
+                elements.versionNotesInput.disabled = true;
+                elements.editVersionNotesBtn.classList.remove('hidden');
+                elements.saveEditedVersionNotesBtn.classList.add('hidden');
+            } catch (error) {
+                console.error("Error saving edited version notes:", error);
+                showMessage(`Lỗi khi lưu ghi chú: ${error.message}`, 5000);
+            }
+        };
+
+        // NEW: Edit Application Functions
+        let appToEditId = null;
+
+        const showEditAppModal = (appId, appName) => {
+            if (!userId) return showMessage('Vui lòng đăng nhập để sửa ứng dụng.');
+            appToEditId = appId;
+            elements.editAppNameInput.value = appName;
+            elements.editAppModal.classList.remove('hidden');
+            elements.editAppNameInput.focus();
+        };
+
+        const hideEditAppModal = () => {
+            appToEditId = null;
+            elements.editAppModal.classList.add('hidden');
+        };
+
+        const saveEditedApplicationName = async () => {
+            if (!userId || !appToEditId) return;
+            const newName = elements.editAppNameInput.value.trim();
+            if (!newName) return showMessage('Tên ứng dụng không được để trống.');
+
+            try {
+                const appRef = doc(db, `users/${userId}/applications/${appToEditId}`);
+                await updateDoc(appRef, {
+                    name: newName
+                });
+                showMessage(`Ứng dụng "${newName}" đã được cập nhật!`);
+                hideEditAppModal();
+                // If the currently selected app was edited, update its display
+                if (currentAppId === appToEditId) {
+                    elements.currentAppNameSpan.textContent = newName;
+                }
+            } catch (error) {
+                console.error("Error updating application name:", error);
+                showMessage('Cập nhật tên ứng dụng thất bại.', 5000);
+            }
+        };
+
+        // NEW: Delete Application Functions (Cascading Delete)
+        const deleteApplicationCascade = async (appId) => {
+            if (!userId || !appId) return;
+
+            if (!confirm('CẢNH BÁO: Bạn có chắc chắn muốn XÓA ỨNG DỤNG NÀY VĨNH VIỄN? Hành động này sẽ xóa TẤT CẢ các phiên bản và tệp liên quan đến ứng dụng này, và không thể hoàn tác.')) {
+                return;
+            }
+
+            try {
+                showMessage('Đang xóa ứng dụng và tất cả dữ liệu liên quan...', 0); // Show persistent message
+
+                // 1. Get all versions for the app
+                const versionsRef = getCollections.versions(appId);
+                const versionsSnapshot = await getDocs(versionsRef);
+
+                const deletePromises = [];
+
+                // 2. For each version, get and delete all files, then delete the version
+                for (const versionDoc of versionsSnapshot.docs) {
+                    const versionId = versionDoc.id;
+                    const filesRef = getCollections.files(appId, versionId);
+                    const filesSnapshot = await getDocs(filesRef);
+
+                    filesSnapshot.forEach((fileDoc) => {
+                        deletePromises.push(deleteDoc(fileDoc.ref));
+                    });
+                    deletePromises.push(deleteDoc(versionDoc.ref)); // Delete the version itself
+                }
+
+                await Promise.all(deletePromises); // Wait for all files and versions to be deleted
+
+                // 3. Finally, delete the application document itself
+                await deleteDoc(doc(db, `users/${userId}/applications/${appId}`));
+
+                showMessage('Ứng dụng và tất cả dữ liệu liên quan đã được xóa vĩnh viễn!');
+
+                // Reset UI if the deleted app was currently selected
+                if (currentAppId === appId) {
+                    currentAppId = null;
+                    currentAppName = null;
+                    currentVersionId = null;
+                    chat = null;
+                    currentVersionFiles.clear();
+
+                    elements.currentAppNameSpan.textContent = "No App Selected";
+                    mainCodeEditor.textContent = '';
+                    applyHighlighting();
+                    toggleEditorPlaceholder();
+                    elements.fileNameInput.value = '';
+                    elements.versionNotesInput.value = '';
+                    elements.versionNotesInput.disabled = true;
+                    elements.editVersionNotesBtn.classList.remove('hidden');
+                    elements.saveEditedVersionNotesBtn.classList.add('hidden');
+                    elements.aiPromptInput.value = '';
+                    elements.aiExplanationBox.innerHTML = '<p class="text-gray-500">Phần giải thích của AI sẽ xuất hiện ở đây...</p>';
+                    elements.versionsList.innerHTML = '<div class="text-gray-500 text-center py-4">Chọn một ứng dụng để xem phiên bản.</div>';
+                    toggleVisualEditModeUI(false); // Reset to default view
+                }
+
+                // loadApplications() will be triggered by onSnapshot automatically
+
+            } catch (error) {
+                console.error("Error deleting application and its data:", error);
+                showMessage(`Lỗi khi xóa ứng dụng: ${error.message}`, 5000);
+            }
+        };
+
+
+        // --- LOGIC CHO THÙNG RÁC ---
+
+        const softDeleteVersion = async () => {
+            if (!userId) return showMessage('Vui lòng đăng nhập.', 3000);
+            if (!currentAppId) return showMessage('Vui lòng chọn một ứng dụng.', 3000);
+            if (!currentVersionId) return showMessage('Vui lòng chọn một phiên bản để xóa.', 3000);
+
+            if (!confirm('Bạn có chắc chắn muốn chuyển phiên bản này vào thùng rác? Bạn có thể khôi phục nó sau này từ mục "Phiên bản đã xóa".')) {
+                return;
+            }
+
+            try {
+                const versionRef = doc(db, `users/${userId}/applications/${currentAppId}/versions/${currentVersionId}`);
+                await updateDoc(versionRef, {
+                    deleted: true,
+                    deletedAt: serverTimestamp()
+                });
+                
+                showMessage('Phiên bản đã được chuyển vào thùng rác!');
+                currentVersionId = null;
+                mainCodeEditor.textContent = '';
+                applyHighlighting();
+                toggleEditorPlaceholder();
+                elements.fileNameInput.value = '';
+                elements.newVersionNotesInput.value = ''; // Clear new version notes
+                elements.versionNotesInput.value = ''; // Clear selected version notes
+                elements.versionNotesInput.disabled = true; // Disable it
+                elements.editVersionNotesBtn.classList.remove('hidden'); // Show edit
+                elements.saveEditedVersionNotesBtn.classList.add('hidden'); // Hide save
+                elements.aiPromptInput.value = '';
+                elements.aiExplanationBox.innerHTML = '<p class="text-gray-500">Phần giải thích của AI sẽ xuất hiện ở đây...</p>';
+                elements.versionFilesList.innerHTML = '<div class="text-gray-500 text-center py-2">Chọn một phiên bản để xem các tệp của nó.</div>';
+                chat = null;
+                toggleVisualEditModeUI(false); // Reset to default view
+
+                loadVersions(currentAppId);
+            } catch (error) {
+                console.error("Error soft deleting version:", error);
+                showMessage(`Lỗi khi chuyển phiên bản vào thùng rác: ${error.message}`, 5000);
+            }
+        };
+
+        const showDeletedVersionsModal = () => {
+            if (!userId || !currentAppId) {
+                return showMessage('Vui lòng chọn một ứng dụng để xem các phiên bản đã xóa.', 3000);
+            }
+            elements.deletedVersionsModal.classList.remove('hidden');
+            loadDeletedVersions();
+        };
+
+        const closeDeletedVersionsModal = () => {
+            elements.deletedVersionsModal.classList.add('hidden');
+            elements.deletedVersionsList.innerHTML = '<div class="text-gray-500 text-center py-4">Đang tải các phiên bản đã xóa...</div>';
+        };
+
+        const loadDeletedVersions = () => {
+            if (!userId || !currentAppId) return;
+            const q = query(getCollections.versions(currentAppId), where('deleted', '==', true), orderBy('deletedAt', 'desc'));
+            onSnapshot(q, (snapshot) => {
+                elements.deletedVersionsList.innerHTML = '';
+                if (snapshot.empty) {
+                    elements.deletedVersionsList.innerHTML = '<div class="text-gray-500 text-center py-4">Thùng rác trống.</div>';
+                    return;
+                }
+                const fragment = document.createDocumentFragment();
+                snapshot.forEach(doc => {
+                    const version = doc.data();
+                    const versionItem = document.createElement('div');
+                    versionItem.className = 'bg-gray-100 p-3 rounded-lg shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2';
+                    const deletedAtDate = version.deletedAt ? new Date(version.deletedAt.toDate()).toLocaleString() : 'N/A';
+                    
+                    versionItem.innerHTML = `
+                        <div>
+                            <p class="font-medium text-gray-700">Phiên bản: ${version.versionIndex || 'N/A'}</p>
+                            <p class="text-sm text-gray-500">${version.notes || 'Không có ghi chú'}</p>
+                            <p class="text-xs text-gray-400">Đã xóa vào: ${deletedAtDate}</p>
+                        </div>
+                        <div class="flex flex-col sm:flex-row gap-2 mt-2 sm:mt-0">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold py-1 px-3 rounded-md transition duration-300 restore-btn" data-version-id="${doc.id}">Khôi phục</button>
+                            <button class="bg-red-600 hover:bg-red-700 text-white text-sm font-bold py-1 px-3 rounded-md transition duration-300 permanent-delete-btn" data-version-id="${doc.id}">Xóa vĩnh viễn</button>
+                        </div>
+                    `;
+                    fragment.appendChild(versionItem);
+                });
+                elements.deletedVersionsList.appendChild(fragment);
+            });
+        };
+
+        const restoreVersion = async (appId, versionId) => {
+            if (!userId || !appId || !versionId) return;
+
+            if (!confirm('Bạn có chắc chắn muốn khôi phục phiên bản này?')) {
+                return;
+            }
+
+            try {
+                const versionRef = doc(db, `users/${userId}/applications/${appId}/versions/${versionId}`);
+                await updateDoc(versionRef, {
+                    deleted: false,
+                    deletedAt: null
+                });
+                showMessage('Phiên bản đã được khôi phục thành công!');
+            } catch (error) {
+                console.error("Error restoring version:", error);
+                showMessage(`Lỗi khi khôi phục phiên bản: ${error.message}`, 5000);
+            }
+        };
+
+        const permanentDeleteVersion = async (appId, versionId) => {
+            if (!userId || !appId || !versionId) return;
+
+            if (!confirm('CẢNH BÁO: Bạn có chắc chắn muốn XÓA VĨNH VIỄN phiên bản này? Hành động này không thể hoàn tác và sẽ xóa tất cả các tệp liên quan đến phiên bản này.')) {
+                return;
+            }
+
+            try {
+                const filesSnapshot = await getDocs(getCollections.files(appId, versionId));
+                const deleteFilePromises = [];
+                filesSnapshot.forEach((fileDoc) => {
+                    deleteFilePromises.push(deleteDoc(fileDoc.ref));
+                });
+                await Promise.all(deleteFilePromises);
+
+                await deleteDoc(doc(db, `users/${userId}/applications/${appId}/versions/${versionId}`));
+                
+                showMessage('Phiên bản và các tệp của nó đã được xóa vĩnh viễn!');
+            } catch (error) {
+                console.error("Error permanently deleting version:", error);
+                showMessage(`Lỗi khi xóa vĩnh viễn phiên bản: ${error.message}`, 5000);
+            }
+        };
+
+
+        // --- Gắn các sự kiện (sử dụng Event Delegation khi có thể) ---
+        elements.loginBtn.addEventListener('click', () => handleAuth(false));
+        elements.registerBtn.addEventListener('click', () => handleAuth(true));
+        elements.logoutBtn.addEventListener('click', handleLogout);
+
+        elements.addNewAppBtn.addEventListener('click', showAddNewAppModal);
+        elements.confirmNewAppBtn.addEventListener('click', addNewApplication);
+        elements.cancelNewAppBtn.addEventListener('click', hideAddNewAppModal);
+        elements.saveVersionBtn.addEventListener('click', () => saveVersion(false, '')); // Manual save
+        elements.sendToAIButton.addEventListener('click', callAI);
+        elements.copyBtn.addEventListener('click', copyCode); 
+        elements.previewBtn.addEventListener('click', showPreview);
+        elements.closePreviewBtn.addEventListener('click', closePreview);
+        elements.softDeleteVersionBtn.addEventListener('click', softDeleteVersion);
+        elements.showDeletedVersionsBtn.addEventListener('click', showDeletedVersionsModal);
+        elements.closeDeletedVersionsModalBtn.addEventListener('click', closeDeletedVersionsModal);
+
+        // NEW: Event listeners for preview mode buttons
+        elements.mobileViewBtn.addEventListener('click', () => setPreviewMode('mobile'));
+        elements.desktopViewBtn.addEventListener('click', () => setPreviewMode('desktop'));
+
+        // NEW: Event listeners for editing selected version notes
+        elements.editVersionNotesBtn.addEventListener('click', editSelectedVersionNotes);
+        elements.saveEditedVersionNotesBtn.addEventListener('click', saveEditedVersionNotes);
+
+        // NEW: Event listeners for edit app modal
+        elements.confirmEditAppBtn.addEventListener('click', saveEditedApplicationName);
+        elements.cancelEditAppBtn.addEventListener('click', hideEditAppModal);
+
+        // NEW: Event listener for AI suggestions toggle button
+        elements.toggleAiSuggestionsBtn.addEventListener('click', toggleAiSuggestions);
+
+        // NEW: Listen for messages from the iframe (element selections)
+        window.addEventListener('message', (event) => {
+            // IMPORTANT: In production, always check event.origin for security!
+            // For local development with srcdoc, event.origin will be 'null' or the parent's origin if loaded from same domain
+            if (event.data && event.data.type === 'elementSelected') {
+                selectedElementInfo = event.data.payload;
+                console.log('Element selected:', selectedElementInfo);
+                const placeholderText = `Bạn muốn thay đổi gì ở ${selectedElementInfo.tagName || 'yếu tố'} "${selectedElementInfo.innerText.substring(0, Math.min(selectedElementInfo.innerText.length, 30))}..."?`;
+                elements.aiPromptInput.placeholder = placeholderText;
+                elements.aiPromptInput.focus();
+            } else if (event.data && event.data.type === 'iframeLoaded') {
+                console.log("Iframe loaded.");
+                // If you want to re-select the previously selected element after iframe refresh,
+                // you would send another postMessage back to the iframe with the element's info.
+                // This is a more advanced feature and not implemented in this stage.
+            }
+        });
+
+
+        elements.searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredApps = allApps.filter(app => app.name.toLowerCase().includes(searchTerm));
+            renderApplications(filteredApps);
+        });
+
+        // Event delegation for applications list
+        elements.applicationsList.addEventListener('click', (e) => {
+            const appItem = e.target.closest('.list-item');
+            if (!appItem) return; // Clicked outside a list item
+
+            const appId = appItem.dataset.appId;
+            const appName = appItem.dataset.appName;
+
+            if (e.target.classList.contains('edit-app-btn')) {
+                e.stopPropagation(); // Prevent selecting the app
+                showEditAppModal(appId, appName);
+            } else if (e.target.classList.contains('delete-app-btn')) {
+                e.stopPropagation(); // Prevent selecting the app
+                deleteApplicationCascade(appId);
+            } else {
+                // Only select the app if not clicking on the buttons
+                selectApplication(appId, appName);
+            }
+        });
+
+        // Event delegation for versions list
+        elements.versionsList.addEventListener('click', (e) => {
+            const versionItem = e.target.closest('.list-item');
+            if (versionItem && versionItem.dataset.versionId && currentAppId) {
+                selectVersion(currentAppId, versionItem.dataset.versionId);
+            }
+        });
+
+        // Event delegation for version files list
+        elements.versionFilesList.addEventListener('click', (e) => {
+            const fileItem = e.target.closest('.list-item');
+            if (fileItem && fileItem.dataset.filename) {
+                loadFileIntoEditor(fileItem.dataset.filename);
+            }
+        });
+
+        // Event delegation for deleted versions modal buttons
+        elements.deletedVersionsList.addEventListener('click', (e) => {
+            if (e.target.classList.contains('restore-btn') && currentAppId) {
+                restoreVersion(currentAppId, e.target.dataset.versionId);
+            } else if (e.target.classList.contains('permanent-delete-btn') && currentAppId) {
+                permanentDeleteVersion(currentAppId, e.target.dataset.versionId);
+            }
+        });
+
+        // Event delegation for AI prompt suggestions
+        elements.aiPromptSuggestionsContainer.addEventListener('click', (e) => {
+            const button = e.target.closest('button');
+            if (button && button.dataset.prompt) {
+                elements.aiPromptInput.value = button.dataset.prompt;
+                elements.aiPromptInput.focus();
+            }
+        });
+
+        // Gắn sự kiện cho trình soạn thảo mới
+        mainCodeEditor.addEventListener('input', () => {
+            applyHighlighting();
+            toggleEditorPlaceholder();
+        });
+        mainCodeEditor.addEventListener('focus', () => {
+            elements.editorPlaceholder.style.display = 'none';
+        });
+        mainCodeEditor.addEventListener('blur', () => {
+            toggleEditorPlaceholder();
+        });
+
+        // Xử lý phím Tab trong contenteditable
+        mainCodeEditor.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const selection = window.getSelection();
+                const range = selection.getRangeAt(0);
+                
+                const tabNode = document.createTextNode('\t');
+                range.insertNode(tabNode);
+                
+                range.setStartAfter(tabNode);
+                range.setEndAfter(tabNode);
+                selection.removeAllRanges();
+                selection.addRange(range);
+
+                applyHighlighting();
+                toggleEditorPlaceholder();
+            }
+        });
+
+        // Initial calls
+        document.addEventListener('DOMContentLoaded', () => {
+            toggleEditorPlaceholder();
+            renderAiPromptSuggestions();
+            // Hide editor and file list elements initially (can be overridden by login state)
+            elementsToHideInVisualMode.forEach(el => el.classList.add('hidden'));
+            // Ensure preview button text is set correctly on load
+            elements.previewBtn.textContent = "Chế độ Chỉnh sửa Trực quan"; 
+        });
+    </script>
+</body>
+</html>
