@@ -210,7 +210,7 @@
         let aiModel;
         try {
             const ai = getAI(app, { backend: new GoogleAIBackend() });
-            aiModel = getGenerativeModel(ai, { model: "gemini-2.5-flash" });
+            aiModel = getGenerativeModel(ai, { model: "gemini-1.5-flash" });
         } catch (e) { console.error("AI Init Error:", e); }
 
         // Global State
@@ -252,11 +252,25 @@
             }, duration);
         }
 
-        function setAiLoading(isLoading, text = 'Gửi tới AI') {
+        function setMainAiLoading(isLoading, text = 'Gửi tới AI') {
             elements.aiButtonText.textContent = text;
             elements.aiButtonSpinner.classList.toggle('hidden', !isLoading);
             elements.sendToAIButton.disabled = isLoading;
+            // Disable other button to prevent concurrent requests
             elements.applyGlobalStyleBtn.disabled = isLoading;
+        }
+
+        // BUG FIX: Separate loading state for the global style button
+        function setGlobalStyleLoading(isLoading) {
+            const btn = elements.applyGlobalStyleBtn;
+            btn.disabled = isLoading;
+            if (isLoading) {
+                btn.innerHTML = `<div class="flex items-center justify-center gap-2"><span>Đang thiết kế...</span><div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div></div>`;
+            } else {
+                btn.textContent = 'Áp dụng cho toàn bộ trang';
+            }
+            // Disable other button to prevent concurrent requests
+            elements.sendToAIButton.disabled = isLoading;
         }
 
         // --- Authentication ---
@@ -441,7 +455,7 @@
             if (!userPrompt) return showMessage("Vui lòng nhập yêu cầu.");
             if (!currentAppId) return showMessage("Vui lòng tạo hoặc chọn một ứng dụng trước.");
             
-            setAiLoading(true, 'AI đang suy nghĩ...');
+            setMainAiLoading(true, 'AI đang suy nghĩ...');
 
             try {
                 if (lastSelectedElementSelector) {
@@ -455,7 +469,7 @@
                 console.error("AI Error:", error);
                 showMessage(`Lỗi AI: ${error.message}`, 5000);
             } finally {
-                setAiLoading(false);
+                setMainAiLoading(false);
                 lastSelectedElementSelector = null;
                 elements.aiPromptInput.value = '';
                 elements.aiPromptInput.placeholder = "Mô tả ý tưởng của bạn...";
@@ -484,7 +498,7 @@
                 console.error("Lỗi khi lập kế hoạch:", e);
                 showMessage("AI không thể lập kế hoạch. Vui lòng thử một yêu cầu khác rõ ràng hơn.");
             } finally {
-                setAiLoading(false);
+                setMainAiLoading(false);
             }
         };
         
@@ -538,25 +552,39 @@
             await saveMultiFileVerson(filesToSave, `AI Modify: ${prompt.substring(0, 50)}...`);
         };
         
+        // BUG FIX: Added try...catch...finally block
         const handleGlobalStyleRequest = async () => {
             const userPrompt = elements.globalStylePromptInput.value.trim();
-            if (!userPrompt || !currentAppId) return;
-            setAiLoading(true, 'AI đang thiết kế lại...');
-            const cssFilename = 'style.css';
-            const currentCss = currentFiles.get(cssFilename) || '/* CSS Styles */';
-            const instruction = `Bạn là một nhà thiết kế web. Cập nhật tệp CSS sau để áp dụng phong cách "${userPrompt}". Chỉ trả về mã CSS, không giải thích. \n\nCSS hiện tại:\n${currentCss}`;
-            const result = await aiModel.generateContent(instruction);
-            const newCss = (await result.response).text().replace(/```css|```/g, '').trim();
-            const updatedFiles = new Map(currentFiles);
-            updatedFiles.set(cssFilename, newCss);
-            for(const [filename, content] of updatedFiles.entries()) {
-                if (filename.endsWith('.html') && !content.includes(`<link rel="stylesheet" href="${cssFilename}">`)) {
-                    updatedFiles.set(filename, content.replace('</head>', `  <link rel="stylesheet" href="${cssFilename}">\n</head>`));
-                }
+            if (!userPrompt || !currentAppId) {
+                return showMessage("Vui lòng chọn một ứng dụng và nhập yêu cầu về phong cách.");
             }
-            await saveMultiFileVerson(updatedFiles, `AI Style: ${userPrompt}`);
-            elements.globalStylePromptInput.value = '';
-            setAiLoading(false);
+            
+            setGlobalStyleLoading(true);
+
+            try {
+                const cssFilename = 'style.css';
+                const currentCss = currentFiles.get(cssFilename) || '/* CSS Styles */';
+                const instruction = `Bạn là một nhà thiết kế web. Cập nhật tệp CSS sau đây để áp dụng phong cách "${userPrompt}". Chỉ trả về mã CSS, không giải thích. \n\nCSS hiện tại:\n${currentCss}`;
+                
+                const result = await aiModel.generateContent(instruction);
+                const newCss = (await result.response).text().replace(/```css|```/g, '').trim();
+                
+                const updatedFiles = new Map(currentFiles);
+                updatedFiles.set(cssFilename, newCss);
+                
+                for(const [filename, content] of updatedFiles.entries()) {
+                    if (filename.endsWith('.html') && !content.includes(`<link rel="stylesheet" href="${cssFilename}">`)) {
+                        updatedFiles.set(filename, content.replace('</head>', `  <link rel="stylesheet" href="${cssFilename}">\n</head>`));
+                    }
+                }
+                await saveMultiFileVerson(updatedFiles, `AI Style: ${userPrompt}`);
+                elements.globalStylePromptInput.value = '';
+            } catch (error) {
+                console.error("Error applying global style:", error);
+                showMessage(`Lỗi khi áp dụng phong cách: ${error.message}`, 5000);
+            } finally {
+                setGlobalStyleLoading(false);
+            }
         };
 
         // --- Event Listeners ---
